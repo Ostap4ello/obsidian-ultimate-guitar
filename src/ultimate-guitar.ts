@@ -3,12 +3,20 @@ import type { SearchResult, SongData } from "./types";
 import { clamp } from "./utils";
 
 const SEARCH_URL = "https://www.ultimate-guitar.com/search.php?search_type=title&value=";
+const DESKTOP_HEADERS = {
+    "User-Agent":
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml",
+};
 
 export async function searchUltimateGuitar(query: string): Promise<SearchResult[]> {
     const directUrl = parseUltimateGuitarUrl(query);
     if (directUrl) return [directUrl];
 
-    const response = await requestUrl({ url: `${SEARCH_URL}${encodeURIComponent(query)}` });
+    const response = await requestUrl({
+        url: `${SEARCH_URL}${encodeURIComponent(query)}`,
+        headers: DESKTOP_HEADERS,
+    });
     if (response.status < 200 || response.status >= 300) {
         throw new Error(`Ultimate Guitar search failed (${response.status}).`);
     }
@@ -50,7 +58,10 @@ export async function searchUltimateGuitar(query: string): Promise<SearchResult[
 }
 
 export async function fetchSong(result: SearchResult): Promise<SongData> {
-    const response = await requestUrl({ url: result.url });
+    const response = await requestUrl({
+        url: result.url,
+        headers: DESKTOP_HEADERS,
+    });
     if (response.status < 200 || response.status >= 300) {
         throw new Error(`Ultimate Guitar page failed (${response.status}).`);
     }
@@ -129,17 +140,21 @@ function extractEmbeddedSearchResults(html: string): SearchResult[] {
 }
 
 function extractSongContent(doc: Document): string {
-    const candidates = [
-        "[class*='js-store']",
-        "[class*='tab-view']",
-        "[class*='song-content']",
-        "pre",
-    ];
+    const candidates = ["[class*='tab-view']", "[class*='song-content']", "pre"];
     for (const selector of candidates) {
-        const text = doc.querySelector(selector)?.textContent;
-        if (text && text.length > 30) return text;
+        const text = doc.querySelector(selector)?.textContent?.trim();
+        if (text && text.length > 30 && !looksLikeScriptText(text)) return text;
     }
-    return doc.body?.innerText ?? "";
+    return "";
+}
+
+function looksLikeScriptText(text: string): boolean {
+    const start = text.trimStart();
+    return (
+        /^(?:<script\b|!function\b|\(function\b|function\b|window\.|var\s|let\s|const\s|\/\*[!])/i.test(
+            start,
+        ) || /(?:webpackJsonp|__NEXT_DATA__|application\/ld\+json)/i.test(start)
+    );
 }
 
 function extractSongPayload(html: string): Partial<SongData> | undefined {
