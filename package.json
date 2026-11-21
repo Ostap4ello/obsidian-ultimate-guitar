@@ -9,6 +9,7 @@
         "dev": "node esbuild.config.mjs development",
         "test": "node --test",
         "install:vault": "node scripts/install-vault.mjs",
+        "release:check": "node scripts/release-check.mjs",
         "format": "prettier --write \"*.{json,js,mjs,ts,css,md}\" \"src/**/*.{ts,js}\" \"scripts/**/*.{js,mjs}\" \"test/**/*.{js,mjs}\"",
         "format:check": "prettier --check \"*.{json,js,mjs,ts,css,md}\" \"src/**/*.{ts,js}\" \"scripts/**/*.{js,mjs}\" \"test/**/*.{js,mjs}\""
     },
