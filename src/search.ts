@@ -6,6 +6,8 @@ import { formatStats } from "./utils";
 export class SearchModal extends Modal {
     private readonly plugin: UltimateGuitarPluginHost;
     private resultsEl!: HTMLElement;
+    private searchTimer?: number;
+    private searchSequence = 0;
 
     constructor(app: App, plugin: UltimateGuitarPluginHost) {
         super(app);
@@ -19,17 +21,40 @@ export class SearchModal extends Modal {
             text.inputEl.focus();
             text.setPlaceholder("Type song name or paste Ultimate Guitar link");
             text.onChange(async (value) => {
-                if (value.trim().length >= 2) await this.search(value.trim());
+                this.cancelPendingSearch();
+                const query = value.trim();
+                if (query.length < 2) {
+                    this.resultsEl.empty();
+                    return;
+                }
+                this.searchTimer = window.setTimeout(() => {
+                    this.searchTimer = undefined;
+                    void this.search(query);
+                }, 400);
             });
         });
         this.resultsEl = this.contentEl.createDiv({ cls: "ug-search-results" });
     }
 
+    onClose(): void {
+        this.cancelPendingSearch();
+    }
+
+    private cancelPendingSearch(): void {
+        this.searchSequence += 1;
+        if (this.searchTimer) {
+            window.clearTimeout(this.searchTimer);
+            this.searchTimer = undefined;
+        }
+    }
+
     async search(query: string): Promise<void> {
+        const sequence = ++this.searchSequence;
         this.resultsEl.empty();
         this.resultsEl.createEl("p", { text: "Searching..." });
         try {
             const results = await searchUltimateGuitar(query);
+            if (sequence !== this.searchSequence) return;
             this.resultsEl.empty();
             if (!results.length) {
                 this.resultsEl.createEl("p", { text: "No results found." });
@@ -37,6 +62,7 @@ export class SearchModal extends Modal {
             }
             for (const result of results) this.renderResult(result);
         } catch (error) {
+            if (sequence !== this.searchSequence) return;
             this.resultsEl.empty();
             this.resultsEl.createEl("p", {
                 text: error instanceof Error ? error.message : "Search failed.",
