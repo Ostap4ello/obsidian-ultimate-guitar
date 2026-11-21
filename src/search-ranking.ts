@@ -8,13 +8,13 @@ export function compareSearchResults(
     const textDifference = textMatchScore(right, query) - textMatchScore(left, query);
     if (textDifference !== 0) return textDifference;
 
-    const ratingDifference = (right.rating ?? 0) - (left.rating ?? 0);
-    if (ratingDifference !== 0) return ratingDifference;
+    const viewDifference = (right.views ?? 0) - (left.views ?? 0);
+    if (viewDifference !== 0) return viewDifference;
 
     const voteDifference = (right.votes ?? 0) - (left.votes ?? 0);
     if (voteDifference !== 0) return voteDifference;
 
-    return (right.views ?? 0) - (left.views ?? 0);
+    return (right.rating ?? 0) - (left.rating ?? 0);
 }
 
 function textMatchScore(result: SearchResult, query: string): number {

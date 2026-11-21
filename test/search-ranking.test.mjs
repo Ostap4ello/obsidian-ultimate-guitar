@@ -7,7 +7,7 @@ import test from "node:test";
 
 const execFileAsync = promisify(execFile);
 
-test("text match precedes rating and popularity when sorting search results", async () => {
+test("text match, views, votes, and rating determine search result order", async () => {
     const temp = await mkdtemp(join(tmpdir(), "obsidian-ug-ranking-"));
     const bundle = join(temp, "search-ranking.mjs");
     try {
@@ -43,6 +43,31 @@ test("text match precedes rating and popularity when sorting search results", as
         );
         if (results[0] !== exact) {
             throw new Error("Exact text match was not prioritized");
+        }
+
+        const lowPopularity = {
+            title: "Hallelujah",
+            artist: "Other Artist",
+            type: "Chords",
+            url: "https://example.com/low",
+            rating: 5,
+            votes: 500,
+            views: 1000,
+        };
+        const highPopularity = {
+            title: "Hallelujah",
+            artist: "Another Artist",
+            type: "Chords",
+            url: "https://example.com/high",
+            rating: 1,
+            votes: 400,
+            views: 2000,
+        };
+        const tieResults = [lowPopularity, highPopularity].sort((left, right) =>
+            compareSearchResults(left, right, "hallelujah"),
+        );
+        if (tieResults[0] !== highPopularity) {
+            throw new Error("View count was not used after text match");
         }
     } finally {
         await rm(temp, { recursive: true, force: true });
