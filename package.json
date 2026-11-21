@@ -1,0 +1,19 @@
+{
+  "name": "obsidian-ultimate-guitar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Search, save, render, and practice Ultimate Guitar songs in Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs development",
+    "test": "node --test",
+    "install:vault": "node scripts/install-vault.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.14.4",
+    "typescript": "^5.7.2"
+  }
+}
