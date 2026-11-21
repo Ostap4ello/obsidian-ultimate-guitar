@@ -55,6 +55,8 @@ const DEFAULT_SETTINGS: UltimateGuitarSettings = {
 };
 
 const SEARCH_URL = "https://www.ultimate-guitar.com/search.php?search_type=title&value=";
+const SONG_VIEW_TYPE = "ultimate-guitar-song";
+const MODE_POLL_INTERVAL_MS = 300;
 
 export default class UltimateGuitarPlugin extends Plugin {
   settings = DEFAULT_SETTINGS;
@@ -63,7 +65,7 @@ export default class UltimateGuitarPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.addSettingTab(new UltimateGuitarSettingTab(this.app, this));
-    this.registerView("ultimate-guitar-song", (leaf) => new UltimateGuitarSongView(leaf, this));
+    this.registerView(SONG_VIEW_TYPE, (leaf) => new UltimateGuitarSongView(leaf, this));
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       void this.routeActiveImportedFile(file);
     }));
@@ -78,7 +80,7 @@ export default class UltimateGuitarPlugin extends Plugin {
     });
     this.registerInterval(window.setInterval(() => {
       void this.routeActiveLeaf(this.getMainLeaf());
-    }, 300));
+    }, MODE_POLL_INTERVAL_MS));
     this.addCommand({
       id: "search-ultimate-guitar",
       name: "Search Ultimate Guitar",
@@ -115,7 +117,7 @@ export default class UltimateGuitarPlugin extends Plugin {
       if (state.state?.file === file.path) return;
     }
 
-    for (const leaf of this.app.workspace.getLeavesOfType("ultimate-guitar-song")) {
+    for (const leaf of this.app.workspace.getLeavesOfType(SONG_VIEW_TYPE)) {
       if (leaf.getRoot() !== this.app.workspace.rootSplit) continue;
       const state = leaf.getViewState();
       if (state.state?.file !== file.path) continue;
@@ -140,7 +142,7 @@ export default class UltimateGuitarPlugin extends Plugin {
       this.leafModes.delete(leaf);
       return;
     }
-    if (leaf.view?.getViewType() === "ultimate-guitar-song") {
+    if (leaf.view?.getViewType() === SONG_VIEW_TYPE) {
       this.leafModes.set(leaf, "reading");
       const state = leaf.getViewState();
       if (state.state?.file !== file.path) await this.openSongView(file, leaf);
@@ -170,7 +172,7 @@ export default class UltimateGuitarPlugin extends Plugin {
   async openSongView(file: TFile, leaf: WorkspaceLeaf): Promise<void> {
     this.leafModes.set(leaf, "reading");
     await leaf.setViewState({
-      type: "ultimate-guitar-song",
+      type: SONG_VIEW_TYPE,
       active: true,
       state: { file: file.path }
     });
@@ -248,7 +250,7 @@ class UltimateGuitarSongView extends ItemView {
   }
 
   getViewType(): string {
-    return "ultimate-guitar-song";
+    return SONG_VIEW_TYPE;
   }
 
   getDisplayText(): string {
@@ -418,6 +420,7 @@ class PreviewModal extends Modal {
 class SongRenderer extends MarkdownRenderChild {
   private readonly song: SongData;
   private readonly plugin: UltimateGuitarPlugin;
+  private metronome?: Metronome;
 
   constructor(containerEl: HTMLElement, song: SongData, plugin: UltimateGuitarPlugin) {
     super(containerEl);
@@ -445,11 +448,13 @@ class SongRenderer extends MarkdownRenderChild {
       content.classList.toggle("ug-text-only", textOnly);
       applyTextOnlyMode(content, textOnly);
     });
-    const metronome = new Metronome(toolbar, this.song, this.plugin);
-    metronome.render();
+    this.metronome = new Metronome(toolbar, this.song, this.plugin);
+    this.metronome.render();
   }
 
-  onunload(): void {}
+  onunload(): void {
+    this.metronome?.stop();
+  }
 }
 
 class Metronome {
