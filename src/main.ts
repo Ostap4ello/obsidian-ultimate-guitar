@@ -160,8 +160,8 @@ export default class UltimateGuitarPlugin extends Plugin {
     async importSong(result: SearchResult, fetchedSong?: SongData): Promise<void> {
         const song = fetchedSong ?? (await fetchSong(result));
         const folder = await this.chooseFolder();
-        const path = `${folder}/${sanitizeFileName(`${song.artist} - ${song.title}`)}.md`;
-        const existing = this.app.vault.getAbstractFileByPath(path);
+        await this.ensureFolder(folder);
+        const path = await this.getUniqueSongPath(folder, `${song.artist} - ${song.title}`);
         const body = [
             "---",
             "ug_imported: true",
@@ -184,14 +184,19 @@ export default class UltimateGuitarPlugin extends Plugin {
             "```",
             "",
         ].join("\n");
-        if (existing instanceof TFile) {
-            await this.app.vault.modify(existing, body);
-            new Notice(`Updated ${path}`);
-            return;
-        }
-        await this.ensureFolder(folder);
         await this.app.vault.create(path, body);
         new Notice(`Imported ${path}`);
+    }
+
+    private async getUniqueSongPath(folder: string, name: string): Promise<string> {
+        const baseName = sanitizeFileName(name);
+        let suffix = 1;
+        let path = `${folder}/${baseName}.md`;
+        while (this.app.vault.getAbstractFileByPath(path) instanceof TFile) {
+            suffix += 1;
+            path = `${folder}/${baseName} ${suffix}.md`;
+        }
+        return path;
     }
 
     async chooseFolder(): Promise<string> {

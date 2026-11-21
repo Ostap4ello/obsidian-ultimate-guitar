@@ -1,4 +1,4 @@
-import { ButtonComponent, ItemView, TFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, TFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import { SongRenderer } from "./renderer";
 import type { SongData, UltimateGuitarPluginHost } from "./types";
 
@@ -7,6 +7,7 @@ export const SONG_VIEW_TYPE = "ultimate-guitar-song";
 export class UltimateGuitarSongView extends ItemView {
     private filePath = "";
     private renderer?: SongRenderer;
+    private currentFile?: TFile;
 
     constructor(
         leaf: WorkspaceLeaf,
@@ -45,6 +46,17 @@ export class UltimateGuitarSongView extends ItemView {
         this.renderer?.onunload();
     }
 
+    onPaneMenu(menu: Menu): void {
+        if (!this.currentFile) return;
+        menu.addItem((item) => {
+            item.setTitle("Edit")
+                .setIcon("pencil")
+                .onClick(() => {
+                    void this.plugin.openMarkdownView(this.currentFile!, this.leaf);
+                });
+        });
+    }
+
     private async renderFile(): Promise<void> {
         this.contentEl.empty();
         if (!this.filePath) return;
@@ -53,6 +65,7 @@ export class UltimateGuitarSongView extends ItemView {
             this.contentEl.createEl("p", { text: "Ultimate Guitar song file not found." });
             return;
         }
+        this.currentFile = file;
         const markdown = await this.app.vault.read(file);
         const songMatch = markdown.match(/```ug-song\s*\n([\s\S]*?)\n```/);
         if (!songMatch) {
@@ -63,10 +76,6 @@ export class UltimateGuitarSongView extends ItemView {
         }
         try {
             const song = JSON.parse(songMatch[1]) as SongData;
-            const toolbar = this.contentEl.createDiv({ cls: "ug-whole-view-toolbar" });
-            new ButtonComponent(toolbar)
-                .setButtonText("Edit")
-                .onClick(() => void this.plugin.openMarkdownView(file, this.leaf));
             const songContainer = this.contentEl.createDiv();
             this.renderer = new SongRenderer(songContainer, song, this.plugin);
             this.renderer.onload();
