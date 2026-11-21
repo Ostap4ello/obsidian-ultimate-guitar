@@ -1,7 +1,8 @@
-import { App, ButtonComponent, Modal, Notice, Setting } from "obsidian";
+import { App, ButtonComponent, Modal, Notice } from "obsidian";
 import type { SearchResult, UltimateGuitarPluginHost } from "./types";
 import { fetchSong, searchUltimateGuitar } from "./ultimate-guitar";
 import { formatStats } from "./utils";
+import { SongRenderer } from "./renderer";
 
 export class SearchModal extends Modal {
     private readonly plugin: UltimateGuitarPluginHost;
@@ -17,21 +18,26 @@ export class SearchModal extends Modal {
     onOpen(): void {
         this.contentEl.addClass("ug-search-modal");
         this.titleEl.setText("Search Ultimate Guitar");
-        new Setting(this.contentEl).setName("Song or artist").addText((text) => {
-            text.inputEl.focus();
-            text.setPlaceholder("Type song name or paste Ultimate Guitar link");
-            text.onChange(async (value) => {
-                this.cancelPendingSearch();
-                const query = value.trim();
-                if (query.length < 2) {
-                    this.resultsEl.empty();
-                    return;
-                }
-                this.searchTimer = window.setTimeout(() => {
-                    this.searchTimer = undefined;
-                    void this.search(query);
-                }, 400);
-            });
+        const field = this.contentEl.createDiv({ cls: "ug-search-field" });
+        const input = field.createEl("input", {
+            type: "search",
+            attr: {
+                "aria-label": "Search",
+                placeholder: "Type song name or paste Ultimate Guitar link",
+            },
+        });
+        input.focus();
+        input.addEventListener("input", () => {
+            this.cancelPendingSearch();
+            const query = input.value.trim();
+            if (query.length < 2) {
+                this.resultsEl.empty();
+                return;
+            }
+            this.searchTimer = window.setTimeout(() => {
+                this.searchTimer = undefined;
+                void this.search(query);
+            }, 400);
         });
         this.resultsEl = this.contentEl.createDiv({ cls: "ug-search-results" });
     }
@@ -84,6 +90,8 @@ export class SearchModal extends Modal {
 }
 
 class PreviewModal extends Modal {
+    private renderer?: SongRenderer;
+
     constructor(
         app: App,
         private readonly plugin: UltimateGuitarPluginHost,
@@ -98,14 +106,11 @@ class PreviewModal extends Modal {
         try {
             const song = await fetchSong(this.result);
             this.contentEl.empty();
-            this.contentEl.createEl("h2", { text: song.title });
-            this.contentEl.createEl("p", { text: `${song.artist} · ${song.type}` });
             const stats = formatStats(song);
             if (stats) this.contentEl.createEl("p", { cls: "ug-search-result-meta", text: stats });
-            this.contentEl.createEl("pre", {
-                cls: "ug-preview-content",
-                text: song.content.slice(0, 4000),
-            });
+            const preview = this.contentEl.createDiv({ cls: "ug-preview-content" });
+            this.renderer = new SongRenderer(preview, song, this.plugin);
+            this.renderer.onload();
             const actions = this.contentEl.createDiv({ cls: "ug-preview-actions" });
             new ButtonComponent(actions)
                 .setButtonText("Import to vault")
@@ -125,5 +130,9 @@ class PreviewModal extends Modal {
                 text: error instanceof Error ? error.message : "Unable to load preview.",
             });
         }
+    }
+
+    onClose(): void {
+        this.renderer?.onunload();
     }
 }

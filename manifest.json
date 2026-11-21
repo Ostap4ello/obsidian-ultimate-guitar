@@ -1,7 +1,7 @@
 {
     "id": "ultimate-guitar",
     "name": "Ultimate Guitar",
-    "version": "0.1.0",
+    "version": "0.2.0-beta.1",
     "minAppVersion": "1.5.0",
     "description": "Search and practice Ultimate Guitar songs inside Obsidian.",
     "author": "Ostap4ello",

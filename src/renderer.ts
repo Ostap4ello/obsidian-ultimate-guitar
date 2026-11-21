@@ -1,6 +1,5 @@
-import { ButtonComponent, MarkdownRenderChild } from "obsidian";
+import { MarkdownRenderChild, setIcon } from "obsidian";
 import type { SongData, UltimateGuitarPluginHost } from "./types";
-import { clamp } from "./utils";
 
 export class SongRenderer extends MarkdownRenderChild {
     private metronome?: Metronome;
@@ -15,23 +14,34 @@ export class SongRenderer extends MarkdownRenderChild {
 
     onload(): void {
         const root = this.containerEl.createDiv({ cls: "ug-song" });
-        root.createEl("h2", { text: this.song.title });
-        root.createEl("p", { text: `${this.song.artist} · ${this.song.type}` });
+        const header = root.createDiv({ cls: "ug-song-header" });
+        header.createEl("h2", { cls: "ug-song-title", text: this.song.title });
+        header.createEl("span", {
+            cls: "ug-song-author",
+            text: `${this.song.artist} · ${this.song.type}`,
+        });
         const toolbar = root.createDiv({ cls: "ug-song-toolbar" });
         const content = root.createDiv({ cls: "ug-song-content" });
         for (const line of this.song.content.split("\n")) renderSongLine(content, line);
 
-        const textToggle = toolbar.createDiv({ cls: "ug-text-toggle" });
-        const textToggleLabel = textToggle.createEl("label", { cls: "ug-switch" });
-        const textToggleInput = textToggleLabel.createEl("input", { type: "checkbox" });
-        textToggleLabel.createSpan({ cls: "ug-switch-slider" });
-        textToggleLabel.createSpan({ cls: "ug-switch-text", text: "Text only" });
-        textToggleInput.addEventListener("change", () => {
-            const textOnly = textToggleInput.checked;
+        const textToggle = toolbar.createDiv({ cls: "ug-mode-switch" });
+        const chordsButton = textToggle.createEl("button", {
+            cls: "ug-mode-option is-selected",
+            text: "Chords",
+        });
+        const textButton = textToggle.createEl("button", {
+            cls: "ug-mode-option",
+            text: "Text only",
+        });
+        const setTextOnly = (textOnly: boolean) => {
             root.classList.toggle("ug-text-only-mode", textOnly);
             content.classList.toggle("ug-text-only", textOnly);
             applyTextOnlyMode(content, textOnly);
-        });
+            chordsButton.classList.toggle("is-selected", !textOnly);
+            textButton.classList.toggle("is-selected", textOnly);
+        };
+        chordsButton.onclick = () => setTextOnly(false);
+        textButton.onclick = () => setTextOnly(true);
 
         this.metronome = new Metronome(toolbar, this.song, this.plugin);
         this.metronome.render();
@@ -53,31 +63,72 @@ class Metronome {
         private readonly song: SongData,
         private readonly plugin: UltimateGuitarPluginHost,
     ) {
-        this.bpm =
+        const configured =
             plugin.settings.bpmBySource[song.sourceUrl] ?? song.bpm ?? plugin.settings.defaultBpm;
+        this.bpm = Math.min(299, Math.max(2, configured));
     }
 
     render(): void {
         const wrapper = this.container.createDiv({ cls: "ug-metronome" });
-        const bpm = wrapper.createEl("input", { type: "number" });
-        bpm.min = "30";
-        bpm.max = "240";
+        wrapper.createEl("span", { cls: "ug-metronome-label", text: "Metronome:" });
+        const controls = wrapper.createDiv({ cls: "ug-metronome-controls" });
+        const bpm = controls.createEl("input", {
+            cls: "ug-bpm-input",
+            type: "text",
+            attr: {
+                "aria-label": "BPM",
+                inputmode: "numeric",
+                maxlength: "3",
+            },
+        });
         bpm.value = String(this.bpm);
-        bpm.setAttribute("aria-label", "BPM");
-        const toggle = wrapper.createEl("button", { text: "Start metronome" });
+        const setBpm = (value: number) => {
+            if (!Number.isFinite(value) || value <= 1 || value >= 300) {
+                bpm.addClass("is-invalid");
+                return;
+            }
+            bpm.removeClass("is-invalid");
+            this.bpm = Math.floor(value);
+            bpm.value = String(this.bpm);
+        };
+        bpm.oninput = () => {
+            const value = Number(bpm.value.replace(/\D/g, "").slice(0, 3));
+            if (bpm.value !== String(value)) bpm.value = String(value);
+            setBpm(value);
+        };
+        bpm.onblur = () => setBpm(Number(bpm.value));
+        const bpmSteps = controls.createDiv({ cls: "ug-bpm-steps" });
+        const minus = bpmSteps.createEl("button", { cls: "ug-bpm-step", text: "-" });
+        const plus = bpmSteps.createEl("button", { cls: "ug-bpm-step", text: "+" });
+        minus.onclick = () => setBpm(this.bpm - 1);
+        plus.onclick = () => setBpm(this.bpm + 1);
+        controls.createEl("span", { cls: "ug-bpm-unit", text: "bpm" });
+        const toggle = controls.createEl("button", {
+            cls: "ug-metronome-toggle",
+            attr: { "aria-label": "Start metronome" },
+        });
+        const setRunning = (running: boolean) => {
+            toggle.classList.toggle("is-on", running);
+            toggle.classList.toggle("is-off", !running);
+            toggle.empty();
+            setIcon(toggle, running ? "pause" : "play");
+            toggle.setAttribute("aria-label", running ? "Stop metronome" : "Start metronome");
+        };
         toggle.onclick = () => {
             if (this.timer) {
                 this.stop();
-                toggle.setText("Start metronome");
+                setRunning(false);
             } else {
-                this.bpm = clamp(Number(bpm.value), 30, 240);
+                setBpm(Number(bpm.value));
+                if (bpm.hasClass("is-invalid")) return;
                 this.song.bpm = this.bpm;
                 this.plugin.settings.bpmBySource[this.song.sourceUrl] = this.bpm;
                 void this.plugin.saveSettings();
                 this.start();
-                toggle.setText("Stop metronome");
+                setRunning(true);
             }
         };
+        setRunning(false);
     }
 
     start(): void {
