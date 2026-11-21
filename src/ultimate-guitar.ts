@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import type { SearchResult, SongData } from "./types";
 import { clamp } from "./utils";
+import { compareSearchResults } from "./search-ranking";
 
 const SEARCH_URL = "https://www.ultimate-guitar.com/search.php?search_type=title&value=";
 const DESKTOP_HEADERS = {
@@ -48,6 +49,7 @@ export async function searchUltimateGuitar(query: string): Promise<SearchResult[
             (result, index, all) =>
                 all.findIndex((candidate) => candidate.url === result.url) === index,
         )
+        .sort((left, right) => compareSearchResults(left, right, query))
         .slice(0, 20);
     if (!results.length) {
         throw new Error(
